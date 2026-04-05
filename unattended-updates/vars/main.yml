@@ -1,3 +1,4 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# vars file for unattended-updates
+# vars file for unattende-updates
+debian_service: unattended-upgrades
+rhel_service: dnf-automatic

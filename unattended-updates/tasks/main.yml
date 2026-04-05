@@ -1,3 +1,11 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# tasks file for unattended-updates
+- name: "Debian: include Debian.yml"
+  ansible.builtin.include_tasks:
+    file: "{{ ansible_os_family }}.yml"
+  when: ansible_os_family == 'Debian'
+
+- name: "Redhat: include Redhat.yml"
+  ansible.builtin.include_tasks:
+    file: "{{ ansible_os_family }}.yml"
+  when: ansible_os_family in ['RedHat','Fedora','Rockey']
+

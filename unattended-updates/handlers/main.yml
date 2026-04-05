@@ -1,3 +1,14 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# handlers file for unattended-updates
+# handlers file for unattended-upgrades
+- name: Restart dnf-automatic
+  ansible.builtin.service:
+    name: dnf-automatic
+    state: restarted
+  when: ansible_os_family == 'Redhat'
+
+- name: Restart unattende-updates
+  ansible.builtin.service:
+    name: "{{ debian_service }}"
+    state: restarted
+    enabled: true
+  when: ansible_os_family == 'Debian'
