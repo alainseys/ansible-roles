@@ -1,0 +1,84 @@
+---
+- name: Ensure old versions of Docker are not installed.
+  ansible.builtin.package:
+    name:
+      - docker
+      - docker-common
+      - docker-engine
+    state: absent
+  become: true
+
+- name: Add Docker GPG key.
+  ansible.builtin.rpm_key:
+    key: "{{ docker_yum_gpg_key }}"
+    state: present
+  when: docker_add_repo | bool
+  become: true
+
+- name: Add Docker repository.
+  ansible.builtin.get_url:
+    url: "{{ docker_yum_repo_url }}"
+    dest: '/etc/yum.repos.d/docker-{{ docker_edition }}.repo'
+    owner: root
+    group: root
+    mode: "0644"
+  when: docker_add_repo | bool
+  become: true
+
+#- name: Configure Docker Nightly repo.
+#  ansible.builtin.lineinfile:
+#    path: '/etc/yum.repos.d/docker-{{ docker_edition }}.repo'
+#    create: true
+#    line: "{{ item }}"
+#    mode: "0644"
+#  with_items:
+#    - '[docker-{{ docker_edition }}-nightly]'
+#    - 'enabled={{ docker_yum_repo_enable_nightly }}'
+#  when: docker_add_repo | bool
+#  become: true
+
+
+- name: Configure Docker Test repo.
+  ansible.builtin.lineinfile:
+    path: '/etc/yum.repos.d/docker-{{ docker_edition }}.repo'
+    create: true
+    line: '{{ item }}'
+    mode: '0644'
+  with_items:
+    - '[docker-{{ docker_edition }}-test]'
+    - 'enabled={{ docker_yum_repo_enable_test }}'
+  when: docker_add_repo | bool
+  become: true
+
+- name: Configure containerd on RHEL 8.
+  block:
+    - name: Ensure runc is not installed.
+      ansible.builtin.package:
+        name: runc
+        state: absent
+
+    - name: Ensure container-selinux is installed.
+      ansible.builtin.package:
+        name: container-selinux
+        state: present
+
+    - name: Ensure containerd.io is installed.
+      ansible.builtin.package:
+        name: containerd.io
+        state: present
+  when: ansible_distribution_major_version | int == 8
+  become: true
+
+- name: Create group docker if not present
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Create Docker folder in /opt
+  ansible.builtin.file:
+    path: /opt/Docker
+    state: directory
+    mode: '0775'
+    owner: root
+    group: docker
+  become: true

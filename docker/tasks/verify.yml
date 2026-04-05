@@ -1,0 +1,10 @@
+---
+- name: Run docker version command
+  ansible.builtin.command: docker compose version
+  register: compose_version_output
+  ignore_errors: true
+
+
+- name: Debug
+  ansible.builtin.debug:
+    msg: "{{ compose_version_output }}"

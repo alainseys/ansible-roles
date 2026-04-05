@@ -1,0 +1,12 @@
+---
+- name: Ensure docker user are added to the docker group
+  ansible.builtin.user:
+    name: "{{ item }}"
+    groups: docker
+    append: true
+  with_items: "{{ docker_users }}"
+  become: true
+
+- name: Reset ssh connection to apply changes
+  ansible.builtin.meta: reset_connection
+  become: true
