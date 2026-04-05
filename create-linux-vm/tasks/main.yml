@@ -1,3 +1,187 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# tasks file for create-linux-vm
+- name: Include install-python.yml
+  ansible.builtin.include_tasks: install-python.yml
+
+- name: Define network rang-id mapping
+  ansible.builtin.set_fact:
+    _range_map:
+      appserver: 103
+      dmz: 4
+      itmgt: 8
+      kubernetes: 32
+
+- name: Fail if vm_network is not defined or unknown
+  ansible.builtin.fail:
+    msg: "vm_network is not defined or unknown. Please define vm_network with a valid value."
+  when: vm_network is not defined or vm_network not in _range_map.keys()
+
+- name: Build the IP-Range API Url
+  ansible.builtin.set_fact:
+    ip_range_url: >-
+      {{ netbox_base_url }}/ipam/ip-ranges/{{ _range_map[vm_network] }}/available-ips/
+
+- name: Get > available IPS from the selected range
+  ansible.builtin.uri:
+    url: "{{ ip_range_url }}"
+    method: GET
+    headers:
+      Authorization: "Token {{ netbox_token }}"
+    validate_certs: false
+  register: subnet_response
+  delegate_to: localhost
+
+- name: Extract the first free IP from this range
+  ansible.builtin.set_fact:
+    first_available_ip: "{{ subnet_response.json | first }}"
+  delegate_to: localhost
+
+- name: PRINT > Results
+  ansible.builtin.debug:
+    msg: "{{ first_available_ip.address.split('/')[0] }}"
+  when: first_available_ip is defined
+  register: network_ip
+  delegate_to: localhost
+
+- name: PRINT > Result with net
+  ansible.builtin.debug:
+    msg: "{{ first_available_ip.address }}"
+  when: first_available_ip is defined
+  delegate_to: localhost
+
+- name: Debug variable
+  ansible.builtin.debug:
+    var: "{{ network_ip }}"
+  delegate_to: localhost
+
+- name: Set guest_id based on vm_template
+  set_fact:
+    vm_guest_id: >-
+      {%- if vm_template == 'Debian-12.7-Template' -%}
+        debian11_64Guest
+      {%- elif vm_template == 'Ubuntu-24.04.1-min-80GB-Thin' -%}
+        ubuntu64Guest
+      {%- elif vm_template == 'k3s-Ubuntu-24.04' -%}
+        ubuntu64Guest
+      {%- elif vm_template == 'Rockey-Linux-9.5-min' -%}
+        rhel7_64Guest
+      {%- else -%}
+        unknownGuest
+      {%- endif -%}
+      
+
+- name: Clone the template
+  community.vmware.vmware_guest:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: false
+    cluster: "{{ vcenter_vm_cluster }}"
+    folder: "{{ vcenter_vm_folder }}"
+    datacenter: "{{ vcenter_datacenter }}"
+    datastore: "{{ vcenter_datastore }}"
+    name: "{{ vm_name | upper }}"
+    state: powered-off
+    template: "{{ vm_template }}"
+    annotation: "{{ comments | default('Deployed by ansible') }} Buisness Contact: {{ email_b_contact }}"
+    networks:
+      - name: "{{ vm_network }}"
+        type: static
+        netmask: "{{ network_netmask }}"
+        gateway: "{{ network_gateway }}"
+        ip: "{{ network_ip.msg }}"
+        device_type: "{{ vm_device_type }}"
+        start_connected: true
+        connected: true
+    wait_for_ip_address: false
+    customization:
+      domain: "{{ vm_domain }}"
+      dns_servers: "{{ vm_dns_servers.split(',') }}"
+    hardware:
+      memory_mb: "{{ memory_mb | int * 1024 }}"
+      num_cpus: "{{ num_cpus }}"
+      hotadd_cpu: false
+    guest_id: "{{ vm_guest_id }}"
+  register: deploy_vm
+
+- name: Ensure the network connects at startup
+  community.vmware.vmware_guest_network:
+    validate_certs: false
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    datacenter: "{{ vcenter_datacenter }}"
+    cluster: "{{ vcenter_vm_cluster }}"
+    name: "{{ vm_name | upper }}"
+    mac_address: "{{ deploy_vm.instance.hw_eth0.macaddress }}"
+    network_name: "{{ vm_network }}"
+    start_connected: true
+    connected: true
+
+- name: Start vm
+  community.vmware.vmware_guest_powerstate:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: false
+    name: "{{ vm_name | upper }}"
+    state: powered-on
+
+- name: Add additional disk if vm_adddisk_sizeGB is defined and > 0
+  community.vmware.vmware_guest_disk:
+    hostname: "{{ vcenter_hostname }}"
+    username: "{{ vcenter_username }}"
+    password: "{{ vcenter_password }}"
+    validate_certs: false
+    datacenter: "{{ vcenter_datacenter }}"
+    name: "{{ vm_name | upper }}"
+    disk:
+      - size_gb: "{{ vm_adddisk_sizeGB }}"
+        type: thin
+        datastore: "{{ vcenter_datastore }}"
+        state: present
+        scsi_controller: 0
+        unit_number: 1
+  when: >
+    vm_adddisk_sizeGB is defined and
+    vm_adddisk_sizeGB | int > 0
+  register: add_disk_result
+  delegate_to: localhost
+
+
+# When all of the above succeeded (register ip & vm to the apis)
+
+- name: Add > IP To NetBox
+  ansible.builtin.uri:
+    url: "{{ netbox_base_url }}/ipam/ip-addresses/"
+    method: POST
+    headers:
+      Content-Type: "application/json"
+      Authorization: "Token {{ netbox_token }}"
+    body_format: json
+    body: |
+      {
+        "address": "{{ first_available_ip.address }}",
+        "status": "active",
+        "description": "IP Added by ansible",
+        "dns_name": "{{ vm_name | upper }}.vanmarcke.be"
+      }
+    validate_certs: false
+  register: netbox_response
+  failed_when: netbox_response.status not in [200, 201]
+  delegate_to: localhost
+
+- name: Include add-to-awx.yml
+  ansible.builtin.include_tasks: add-to-awx.yml
+  vars:
+    passed_network_ip: "{{ network_ip }}"
+    passed_vm_name: "{{ vm_name | upper }}"
+    inventory_id: "11" # Update this value to match you awx controller
+    passed_vm_template: "{{ vm_template }}"
+
+- name: Wait
+  ansible.builtin.pause:
+    seconds: 5
+
+- name: Include mail.yml
+  ansible.builtin.include_tasks: mail.yml
+

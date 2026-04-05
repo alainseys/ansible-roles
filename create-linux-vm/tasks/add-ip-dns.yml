@@ -1,0 +1,24 @@
+---
+# tasks file for create-vm
+- name: Upgrade PIP
+  ansible.builtin.pip:
+    name: pip
+    state: latest
+  delegate_to: localhost
+
+- name: Install winrm
+  ansible.builtin.pip:
+    name: pywinrm
+  delegate_to: localhost
+
+- name: Add DNS record to windows dns server
+  vanmarcke.dns:
+    server: "{{ item.server }}"
+    username: "{{ item.username }}"
+    password: "{{ item.password }}"
+    zone_name: "{{ item.zone_name }}"
+    record_name: "{{ passed_vm_name }}"
+    record_ip: "{{ passed_network_ip }}"
+  delegate_to: localhost
+  loop:
+    - { server: "AD-DC-01.VM.BE", username: "VM\\ansible", password: "{{ vm_ansible_password }}", zone_name: "VM.BE" }

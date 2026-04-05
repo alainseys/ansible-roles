@@ -1,3 +1,5 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# vars file for create-linux-vm
+# vars file for create-vm
+network_name: "appserver"
+network_netmask: "255.255.254.0"
+network_gateway: "172.27.247.254"

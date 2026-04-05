@@ -1,0 +1,78 @@
+---
+# tasks file for create-vm
+- name: Add host to AWX Collection
+  ansible.builtin.uri:
+    url: "{{ awx_base_url}}/hosts/"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ passed_vm_name }}"
+      description: "{{ passed_vm_name }} added to AWX using ansible"
+      enabled: true
+      variables: |
+        ---
+        ansible_host: "{{ passed_network_ip.msg }}"
+      inventory: "{{ inventory_id }}"
+    headers:
+      Authorization: 'Bearer {{ awx_token }}'
+    status_code: 201
+    validate_certs: false
+    follow_redirects: true
+  delegate_to: localhost
+
+- name: API Lookup AWX > get Host ID
+  ansible.builtin.uri:
+    url: "{{ awx_base_url }}/hosts/?name={{ passed_vm_name }}"
+    method: "GET"
+    return_content: true
+    headers:
+      Authorization: 'Bearer {{ awx_token }}'
+    validate_certs: false
+    status_code: [200, 201]
+    follow_redirects: true
+  register: api_response
+  delegate_to: localhost
+
+- name: Extract HostID from JSON Response
+  ansible.builtin.set_fact:
+    host_id: "{{ api_response.json.results[0].id }}"
+  delegate_to: localhost
+
+- name: Display Host ID
+  ansible.builtin.debug:
+    msg: "Host ID is {{ host_id }}"
+
+- name: Execute task conditionally for Debian
+  block:
+    - name: Task for Debian
+      ansible.builtin.uri:
+        url: "{{ awx_base_url }}/hosts/{{ host_id }}/groups/"
+        method: POST
+        body_format: json
+        body:
+          id: 113
+        headers:
+          Authorization: 'Bearer {{ awx_token }}'
+        status_code: [200, 201, 204]
+        validate_certs: false
+        follow_redirects: true
+  when: 
+    - passed_vm_template == "Debian-12.7-Template"
+    - passed_vm_template == "Ubuntu-24.04.1-min-80GB-Thin"
+    - passed_vm_template == "k3s-Ubuntu-24.04"
+
+- name: Execute task conditionally from RHEL
+  block:
+    - name: Task from RHEL
+      ansible.builtin.uri:
+        url: "{{ awx_base_url }}/hosts/{{ host_id }}/groups/"
+        method: POST
+        body_format: json
+        body:
+          id: 114
+        headers:
+          Authorization: 'Bearer {{ awx_token }}'
+        status_code: [200, 201, 204]
+        validate_certs: false
+        follow_redirects: true
+

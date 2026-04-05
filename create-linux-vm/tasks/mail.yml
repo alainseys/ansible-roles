@@ -1,0 +1,27 @@
+---
+- name: Send Email after vm deployment
+  community.general.mail:
+    host: {{ smtp_server}}
+    port: 25
+    to: {{ email_to}}
+    from: {{ email_from}}
+    subject: "New VM Deployed on vcenter {{ vm_name | upper }}"
+    body: |
+      <html>
+      <body>
+        <h2>New VM has been deployed</h2>
+        <table border="1">
+          <tr><td><strong>VM Name</strong></td><td>{{ vm_name | upper }}</td></tr>
+          <tr><td><strong>IP Address</strong></td><td>{{ network_ip.msg }}</td></tr>
+          <tr><td><strong>Template Used</strong></td><td>{{ vm_template }}</td></tr>
+          <tr><td><strong>Network Used</strong></td><td>{{ vm_network }}</td></tr>
+          <tr><td><strong>Network Device</strong></td><td>{{ vm_device_type }}</td></tr>
+          <tr><td><strong>Memory</strong></td><td>{{ memory_mb }}</td></tr>
+          <tr><td><strong>CPU</strong></td><td>{{ num_cpus }}</td></tr>
+        </table>
+        <p>Action was initiated by {{ tower_user_first_name }} {{ tower_user_last_name }} </p>
+      </body>
+      </html>
+    subtype: html
+    secure: never
+  delegate_to: localhost
