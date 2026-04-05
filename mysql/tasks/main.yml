@@ -1,3 +1,38 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# tasks file for mysql
+# Variable configuration.
+- name: Include variables
+  ansible.builtin.include_tasks: variables.yml
+
+# Setup/install tasks.
+- name: Include setup-RedHat.yml
+  ansible.builtin.include_tasks: setup-RedHat.yml
+  when: ansible_os_family in ['RedHat','Fedora','Rockey']
+
+- name: Include setup-Debian.yml
+  ansible.builtin.include_tasks: setup-Debian.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Check if MySQL packages were installed.
+  ansible.builtin.set_fact:
+    mysql_install_packages: "{{ (rh_mysql_install_packages is defined and rh_mysql_install_packages.changed)
+      or (deb_mysql_install_packages is defined and deb_mysql_install_packages.changed)
+      or (arch_mysql_install_packages is defined and arch_mysql_install_packages.changed) }}"
+  become: true
+
+# Configure MySQL.
+- name: Configure Mysql
+  ansible.builtin.include_tasks: configure.yml
+
+- name: Secure Installation
+  ansible.builtin.include_tasks: secure-installation.yml
+
+# NOW create databases and users after root password is set
+
+- name: Configure Databases
+  ansible.builtin.include_tasks: databases.yml
+
+- name: Configure Users
+  ansible.builtin.include_tasks: mysql_users.yml
+
+- name: Configure Replication
+  ansible.builtin.include_tasks: replication.yml
