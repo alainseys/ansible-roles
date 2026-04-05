@@ -1,0 +1,57 @@
+- name: "Debian: > Update cache once per 24 Hours"
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 86400
+
+- name: Debian Ensure UFW is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+  become: true
+
+- name: Ensure UFW is enabled and started
+  ansible.builtin.service:
+    name: ufw
+    state: started
+    enabled: true
+  become: true
+
+- name: Open the ports
+  ansible.builtin.command: ufw status numbered
+  register: current_ports
+  become: true
+
+- name: Set facts for the open ports
+  ansible.builtin.set_fact:
+    current_open_ports: "{{ current_ports.stdout_lines | select('search', 'ALLOW') | map('regex_replace', '^\\s*\\d+\\s+ALLOW\\s+([\\w/]+).*$', '\\1') | list }}"
+
+- name: Open ports
+  ansible.builtin.command: ufw allow {{ item.port }}
+  loop: "{{ firewalld_rules[inventory_hostname] | default([]) }}"
+  when: firewalld_rules[inventory_hostname] is defined and firewalld_rules[inventory_hostname] | length > 0
+  notify: Check if reload is needed
+
+- name: Close unwanted ports
+  ansible.builtin.command: ufw deny {{ item }}
+  loop: "{{ current_open_ports }}"
+  when:
+    - firewall_rules[inventory_hostname] is defined
+    - item not in firewalld_rules[inventory_hostname] | map(attribute='port') | default([])
+  notify: Check if reload is needed
+
+- name: Reload UFW if needed
+  ansible.builtin.command: ufw reload
+  when: ansible_facts['os_family'] in ['Debian','Ubuntu']
+  become: true
+
+- name: Start UFW
+  ansible.builtin.service:
+    name: ufw
+    state: started
+  become: true
+
+- name: Enable UFW
+  ansible.builtin.systemd: 
+    name: ufw
+    enabled: true
+  become: true
