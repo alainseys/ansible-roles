@@ -1,3 +1,18 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# handlers file for mounts
+- name: mount all filesystems
+  ansible.posix.mount:
+    path: "{{ item.mount }}"
+    src: "{{ item.src }}"
+    fstype: "{{ item.fstype | default('auto') }}"
+    opts: "{{ item.opts | default('defaults') }}"
+    state: mounted
+  loop: "{{ mounts_list }}"
+  become: true
+
+- name: unmount filesystems
+  ansible.posix.mount:
+    path: "{{ item.mount }}"
+    state: unmounted
+  loop: "{{ mounts_list }}"
+  ignore_errors: true
+  become: true 

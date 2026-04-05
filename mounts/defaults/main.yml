@@ -1,3 +1,13 @@
-#SPDX-License-Identifier: MIT-0
+# defaults/main.yml
 ---
-# defaults file for mounts
+mount_options:
+  ext4: defaults,noatime,nodiratime
+  xfs: defaults,noatime,nodiratime
+  btrfs: defaults,noatime,nodiratime,compress=zstd
+  nfs: defaults,rw,hard,intr,tcp
+  nfs4: defaults,rw,hard,intr,tcp
+  bind: defaults,bind
+  
+mount_state: present
+mount_validate: true 
+

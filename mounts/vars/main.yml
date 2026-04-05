@@ -1,3 +1,18 @@
-#SPDX-License-Identifier: MIT-0
 ---
-# vars file for mounts
+supported_filesystems:
+  - ext2
+  - ext3
+  - ext4
+  - xfs
+  - btrfs
+  - reiserfs
+  - jfs
+  - nfs
+  - cifs
+
+# Default mount options per filesystem type
+default_mount_options:
+  ext4: "defaults,noatime"
+  xfs: "defaults,noatime"
+  nfs: "defaults,nfsvers=4.2"
+  cifs: "credentials=/etc/.credentials,uid=0,gid=0,file_mode=0755,dir_mode=0755"
